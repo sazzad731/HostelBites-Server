@@ -27,7 +27,19 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
 
     const db = client.db("HostelBites");
-    const mealsCollection = db.collection("meals")
+    const usersCollection = db.collection("users")
+    const mealsCollection = db.collection("meals");
+
+
+    app.post("/users", async(req, res)=>{
+      const userInfo = req.body;
+      const userExist = await usersCollection.findOne({ email: userInfo.email });
+      if(userExist){
+        return res.status(400).json({ message: "Email already exists" });
+      }
+      const result = await usersCollection.insertOne(userInfo);
+      res.send(result);
+    })
 
 
     // get meals by category
