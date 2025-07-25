@@ -63,6 +63,15 @@ async function run() {
     })
 
 
+    // Meal likes
+    app.patch('/like', async(req, res)=>{
+      const { id } = req.body;
+      const query = { _id: new ObjectId(id) };
+      const result = await mealsCollection.updateOne(query, {$inc: {likes: 1}})
+      res.send(result)
+    })
+
+
 
 
     await client.connect();
