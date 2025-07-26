@@ -3,7 +3,7 @@ const app = express();
 require("dotenv").config();
 const cors = require("cors")
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require("mongodb");
 
 app.use(cors())
 app.use(express.json());
@@ -68,6 +68,22 @@ async function run() {
       const { id } = req.body;
       const query = { _id: new ObjectId(id) };
       const result = await mealsCollection.updateOne(query, {$inc: {likes: 1}})
+      res.send(result)
+    })
+
+
+    app.post('/add-review', async (req, res) =>{
+      const data = req.body;
+      const { mealId } = req.query
+      const query = { _id: new ObjectId(mealId) }
+      const addedReview = {
+        ...data,
+        timeStamp: new Date()
+      }
+      
+      const result = await mealsCollection.updateOne(query, {
+        $push: { reviews: addedReview },
+      }); 
       res.send(result)
     })
 
