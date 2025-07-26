@@ -43,7 +43,7 @@ async function run() {
 
 
     // get meals by category
-    app.get('/meals', async(req, res)=>{
+    app.get('/mealsByCategory', async(req, res)=>{
       const category = req.query.category;
       let query = {}
       if(category){
@@ -51,6 +51,40 @@ async function run() {
       }
       const result = await mealsCollection.find(query).limit(3).toArray();
       res.send(result)
+    })
+
+
+    //get meals by search, category and price range
+    app.get("/meals", async(req, res)=>{
+      const {page = 1, limit = 10, search, category, priceRange } = req.query;
+      let query = {};
+
+      // Search by text (e.g., meal title)
+      if (search) {
+        query = { title: { $regex: search, $options: "i" } };
+      }
+
+      // Filter by category
+      if (category && category !== "") {
+        query.category = category;
+      }
+
+      // Filter by price range
+      if (priceRange && priceRange !== "") {
+        const [min, max] = priceRange.split("-").map(value=>Number(value.replace("$", "")));
+        query.price = { $gte: min, $lte: max };
+      }
+
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      const meals = await mealsCollection.find(query).skip(skip).limit(parseInt(limit)).toArray();
+      const total = await mealsCollection.countDocuments(query);
+      
+      res.send({
+        meals,
+        total,
+      });
+      
     })
 
 
