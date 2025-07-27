@@ -27,6 +27,7 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
 
     const db = client.db("HostelBites");
+    const packagesCollection = db.collection("packages")
     const usersCollection = db.collection("users")
     const mealsCollection = db.collection("meals");
 
@@ -86,6 +87,14 @@ async function run() {
       });
       
     })
+
+
+    // packages api
+    app.get("/packages", async(req, res)=>{
+      const result = await packagesCollection.find().toArray();
+      res.send(result);
+    })
+
 
 
     // get Meal details
