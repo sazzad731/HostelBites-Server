@@ -32,6 +32,7 @@ async function run() {
     const paymentCollection = db.collection("payments")
     const usersCollection = db.collection("users")
     const mealsCollection = db.collection("meals");
+    const mealRequestCollection = db.collection("mealRequest");
 
 
     app.post("/users", async(req, res)=>{
@@ -87,8 +88,19 @@ async function run() {
         meals,
         total,
       });
-      
     })
+
+
+    //Meal request api
+    app.post("/meal-request", async(req, res)=>{
+      const requestInfo = req.body;
+      const existRequest = await mealRequestCollection.findOne({ mealId: requestInfo.mealId });
+      if(existRequest){
+        return res.status(208).send({ message: "Already requested for meal", code: 208 });
+      }
+      const result = await mealRequestCollection.insertOne(requestInfo);
+      res.send(result);
+    });
 
 
     // get all packages api
@@ -119,7 +131,7 @@ async function run() {
       const { amountInCents } = req.body;
       try{
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountInCents, // amount in cents
+          amount: parseInt(amountInCents), // amount in cents
           currency: "usd",
           payment_method_types: ["card"],
         });
@@ -131,7 +143,7 @@ async function run() {
 
 
 
-    app.post('/payments', async(req, res)=>{
+    app.put('/payments', async(req, res)=>{
       const { packageName, email, amount, paymentMethod, transactionId } = req.body;
       try{
         // update user badge
@@ -148,17 +160,20 @@ async function run() {
           return res.status(404).send({message: "User not found or already subscribed"})
         }
 
-        // insert payment record
+        // update or insert payment record
         const paymentDoc = {
-          packageName,
-          email,
-          amount,
-          paymentMethod,
-          transactionId,
-          paidAt: new Date()
+          $set: {
+            packageName,
+            email,
+            amount,
+            paymentMethod,
+            transactionId,
+            paidAt: new Date(),
+          },
         };
+        const options = { upsert: true };
 
-        const paymentResult = await paymentCollection.insertOne(paymentDoc);
+        const paymentResult = await paymentCollection.updateOne({email: email}, paymentDoc, options);
         res.status(201).send(paymentResult)
 
       }catch(error){
