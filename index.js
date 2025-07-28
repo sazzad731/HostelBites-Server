@@ -193,10 +193,12 @@ async function run() {
 
 
     // Meal likes
-    app.patch('/like', async(req, res)=>{
-      const { id } = req.body;
-      const query = { _id: new ObjectId(id) };
-      const result = await mealsCollection.updateOne(query, {$inc: {likes: 1}})
+    app.post('/like', async(req, res)=>{
+      const { mealId, email } = req.body;
+      const query = { _id: new ObjectId(mealId) };
+      const result = await mealsCollection.updateOne(query, {
+        $push: {likes: email}
+      })
       res.send(result)
     })
 
