@@ -4,6 +4,7 @@ require("dotenv").config();
 const cors = require("cors")
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors())
 app.use(express.json());
@@ -27,7 +28,8 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
 
     const db = client.db("HostelBites");
-    const packagesCollection = db.collection("packages")
+    const packagesCollection = db.collection("packages");
+    const paymentCollection = db.collection("payments")
     const usersCollection = db.collection("users")
     const mealsCollection = db.collection("meals");
 
@@ -102,6 +104,66 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await packagesCollection.findOne(query);
       res.send(result);
+    })
+
+
+    app.get("/already_purchased", async(req, res)=>{
+      const { email } = req.query;
+      const query = { email }
+      const result = await paymentCollection.findOne(query);
+      res.send(result);
+    });
+
+
+    app.post("/create-payment-intent", async(req, res)=>{
+      const { amountInCents } = req.body;
+      try{
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents, // amount in cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        res.send({clientSecret: paymentIntent.client_secret})
+      }catch(error){
+        res.status(500).send({error: error.message})
+      }
+    })
+
+
+
+    app.post('/payments', async(req, res)=>{
+      const { packageName, email, amount, paymentMethod, transactionId } = req.body;
+      try{
+        // update user badge
+        const updateBadge = await usersCollection.updateOne(
+          { email: email },
+          {
+            $set: {
+              badge: packageName
+            },
+          }
+        );
+
+        if(updateBadge.modifiedCount === 0){
+          return res.status(404).send({message: "User not found or already subscribed"})
+        }
+
+        // insert payment record
+        const paymentDoc = {
+          packageName,
+          email,
+          amount,
+          paymentMethod,
+          transactionId,
+          paidAt: new Date()
+        };
+
+        const paymentResult = await paymentCollection.insertOne(paymentDoc);
+        res.status(201).send(paymentResult)
+
+      }catch(error){
+        res.send(error);
+      }
     })
 
 
