@@ -89,9 +89,18 @@ async function run() {
     })
 
 
-    // packages api
+    // get all packages api
     app.get("/packages", async(req, res)=>{
       const result = await packagesCollection.find().toArray();
+      res.send(result);
+    })
+
+
+    // get single package by id
+    app.get('/package/:id', async(req, res)=>{
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await packagesCollection.findOne(query);
       res.send(result);
     })
 
