@@ -35,6 +35,13 @@ async function run() {
     const mealRequestCollection = db.collection("mealRequest");
 
 
+    app.get("/user", async(req, res)=>{
+      const { email } = req.query;
+      const result = await usersCollection.findOne({ email });
+      res.send(result);
+    })
+
+
     app.post("/users", async(req, res)=>{
       const userInfo = req.body;
       const userExist = await usersCollection.findOne({ email: userInfo.email });
