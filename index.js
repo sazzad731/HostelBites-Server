@@ -185,6 +185,13 @@ async function run() {
       res.send(result);
     });
 
+    // get all payment
+    app.get('/payment-history', async(req, res)=>{
+      const { email } = req.query;
+      const result = await paymentCollection.find({ email }).toArray();
+      res.send(result);
+    })
+
 
     app.post("/create-payment-intent", async(req, res)=>{
       const { amountInCents } = req.body;
