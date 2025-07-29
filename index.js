@@ -38,7 +38,8 @@ async function run() {
     app.get("/user", async(req, res)=>{
       const { email } = req.query;
       const result = await usersCollection.findOne({ email });
-      res.send(result);
+      const numberOfMeals = await mealsCollection.estimatedDocumentCount();
+      res.send({ result, numberOfMeals});
     })
 
 
