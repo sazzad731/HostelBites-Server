@@ -262,6 +262,25 @@ async function run() {
     })
 
 
+    // Get all review
+    app.get("/reviews", async(req, res)=>{
+      const { email } = req.query;
+      const result = await mealsCollection.aggregate([
+        { $unwind: "$reviews" },
+        { $match: { "reviews.email": email } },
+        {
+          $project: {
+            mealId: "$_id",
+            mealTitle: "$title",
+            like: {$size: "$likes"},
+            review: "$reviews",
+          },
+        },
+      ]).toArray();
+      res.send(result)
+    })
+
+
     app.post('/add-review', async (req, res) =>{
       const data = req.body;
       const { mealId } = req.query
