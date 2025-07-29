@@ -98,6 +98,58 @@ async function run() {
     })
 
 
+
+    // get requested meals
+    app.get("/requested-meals", async (req, res) => {
+      const { email } = req.query;
+      try {
+        const requestedMeals = await mealRequestCollection
+          .aggregate([
+            {
+              $match: { userEmail: email },
+            },
+            {
+              $addFields: {
+                mealId: { $toObjectId: "$mealId" },
+              },
+            },
+            {
+              $lookup: {
+                from: "meals",
+                localField: "mealId",
+                foreignField: "_id",
+                as: "meal",
+              },
+            },
+            {
+              $unwind: "$meal",
+            },
+            {
+              $project: {
+                _id: 1,
+                mealId: 1,
+                status: 1,
+                userEmail: 1,
+                title: "$meal.title",
+                likes: { $size: "$meal.likes" },
+                reviews_count: { $size: "$meal.reviews" }
+              },
+            },
+          ])
+          .toArray();
+
+        res.send(requestedMeals);
+      } catch (err) {
+        console.error(err);
+        res
+          .status(500)
+          .send({ message: "Server error retrieving requested meals" });
+      }
+    });
+
+
+
+
     //Meal request api
     app.post("/meal-request", async(req, res)=>{
       const requestInfo = req.body;
