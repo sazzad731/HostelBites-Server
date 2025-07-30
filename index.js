@@ -35,11 +35,34 @@ async function run() {
     const mealRequestCollection = db.collection("mealRequest");
 
 
+    //find single user  
     app.get("/user", async(req, res)=>{
       const { email } = req.query;
       const result = await usersCollection.findOne({ email });
       const numberOfMeals = await mealsCollection.estimatedDocumentCount();
       res.send({ result, numberOfMeals});
+    })
+
+
+    // get all users
+    app.get('/users', async(req, res)=>{
+      const { nameOrEmail } = req.query;
+      const query = {};
+
+      if (nameOrEmail) {
+        query.$or = [
+          { name: { $regex: nameOrEmail, $options: "i" } },
+          { email: { $regex: nameOrEmail, $options: "i" } },
+        ];
+      }
+
+      try {
+        const users = await usersCollection.find(query).toArray();
+        res.send(users);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).send({ error: "Failed to fetch users" });
+      }
     })
 
 
@@ -96,6 +119,18 @@ async function run() {
         meals,
         total,
       });
+    })
+
+
+    // Add meal api
+    app.post('/add-meal', async(req, res)=>{
+      const data = req.body;
+      const mealData = {
+        ...data,
+        postTime: new Date(),
+      };
+      const result = await mealsCollection.insertOne(mealData);
+      res.send(result);
     })
 
 
