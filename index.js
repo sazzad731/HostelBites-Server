@@ -35,6 +35,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const mealsCollection = db.collection("meals");
     const mealRequestCollection = db.collection("mealRequest");
+    const upcomingMealsCollection = db.collection("upcomingMeals");
 
     //find single user
     app.get("/user", async (req, res) => {
@@ -162,6 +163,45 @@ async function run() {
         postTime: new Date(),
       };
       const result = await mealsCollection.insertOne(mealData);
+      res.send(result);
+    });
+
+
+
+    // get all upcoming meals
+    app.get("/upcoming-meals", async(req, res)=>{
+      const result = await upcomingMealsCollection
+        .aggregate([
+          {
+            $addFields: {
+              likesCount: { $size: "$likes" },
+            },
+          },
+          { $sort: { likesCount: -1 } },
+        ])
+        .toArray();
+      res.send(result);
+    })
+
+
+    // Post an upcoming meals
+    app.post("/upcoming-meals", async(req, res)=>{
+      const data = req.body;
+      const mealData = {
+        ...data,
+        postTime: new Date(),
+      };
+      const result = await upcomingMealsCollection.insertOne(mealData);
+      res.send(result);
+    })
+
+
+
+    // Delete upcoming meal
+    app.delete("/delete-upcomingMeal/:id", async(req, res)=>{
+      const {id} = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await upcomingMealsCollection.deleteOne(query);
       res.send(result);
     });
 
