@@ -130,7 +130,6 @@ async function run() {
     app.get("/all-meals", async (req, res) => {
       const { sort } = req.query;
 
-      
       let pipeline = [
         {
           $addFields: {
@@ -166,53 +165,108 @@ async function run() {
       res.send(result);
     });
 
-    // get requested meals
-    app.get("/requested-meals", async (req, res) => {
-      const { email } = req.query;
-      try {
-        const requestedMeals = await mealRequestCollection
-          .aggregate([
-            {
-              $match: { userEmail: email },
-            },
-            {
-              $addFields: {
-                mealId: { $toObjectId: "$mealId" },
-              },
-            },
-            {
-              $lookup: {
-                from: "meals",
-                localField: "mealId",
-                foreignField: "_id",
-                as: "meal",
-              },
-            },
-            {
-              $unwind: "$meal",
-            },
-            {
-              $project: {
-                _id: 1,
-                mealId: 1,
-                status: 1,
-                userEmail: 1,
-                title: "$meal.title",
-                likes: { $size: "$meal.likes" },
-                reviews_count: { $size: "$meal.reviews" },
-              },
-            },
-          ])
-          .toArray();
 
-        res.send(requestedMeals);
+
+
+    // get requested meals (for user and admin)
+    app.get("/requested-meals", async (req, res) => {
+      const { email, role, search } = req.query;
+
+      const isAdmin = role === "admin";
+
+      const matchStage = isAdmin ? {} : { userEmail: email };
+
+      const pipeline = [
+        { $match: matchStage },
+
+        // Convert mealId string to ObjectId
+        {
+          $addFields: {
+            mealObjectId: { $toObjectId: "$mealId" },
+          },
+        },
+
+        // Join with meals collection
+        {
+          $lookup: {
+            from: "meals",
+            localField: "mealObjectId",
+            foreignField: "_id",
+            as: "meal",
+          },
+        },
+        { $unwind: "$meal" },
+      ];
+
+      // Admin: always lookup user name
+      if (isAdmin) {
+        pipeline.push(
+          {
+            $lookup: {
+              from: "users",
+              localField: "userEmail",
+              foreignField: "email",
+              as: "user",
+            },
+          },
+          { $unwind: "$user" }
+        );
+
+        // If search is provided, match user name or email
+        if (search) {
+          pipeline.push({
+            $match: {
+              $or: [
+                { "user.name": { $regex: search, $options: "i" } },
+                { "user.email": { $regex: search, $options: "i" } },
+              ],
+            },
+          });
+        }
+      }
+
+      // Final projection
+      pipeline.push({
+        $project: {
+          _id: 1,
+          mealId: 1,
+          status: 1,
+          userEmail: 1,
+          title: "$meal.title",
+          likes: { $size: "$meal.likes" },
+          reviews_count: { $size: "$meal.reviews" },
+          userName: isAdmin ? "$user.name" : "$$REMOVE",
+        },
+      });
+
+      try {
+        const result = await mealRequestCollection
+          .aggregate(pipeline)
+          .toArray();
+        res.send(result);
       } catch (err) {
         console.error(err);
-        res
-          .status(500)
-          .send({ message: "Server error retrieving requested meals" });
+        res.status(500).send({ message: "Failed to fetch requested meals" });
       }
     });
+
+
+
+    // Update requested meals status
+    app.patch("/requested-meal/status/update", async(req, res)=>{
+      const { id } = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          status: "delivered",
+        },
+      };
+      const result = await mealRequestCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    });
+
+
+
 
     //Meal request api
     app.post("/meal-request", async (req, res) => {
@@ -228,6 +282,8 @@ async function run() {
       const result = await mealRequestCollection.insertOne(requestInfo);
       res.send(result);
     });
+
+
 
     // get all packages api
     app.get("/packages", async (req, res) => {
