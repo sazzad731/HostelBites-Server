@@ -424,8 +424,14 @@ async function run() {
 
     // Meal likes
     app.post("/like", async (req, res) => {
-      const { mealId, email } = req.body;
+      const { mealId, email, badge } = req.body;
       const query = { _id: new ObjectId(mealId) };
+      if (badge === "Silver" || badge === "Gold" || badge === "Platinum") {
+        const result = await upcomingMealsCollection.updateOne(query, {
+          $push: { likes: email },
+        });
+        return res.send(result);
+      }
       const result = await mealsCollection.updateOne(query, {
         $push: { likes: email },
       });
