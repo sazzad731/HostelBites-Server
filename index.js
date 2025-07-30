@@ -327,7 +327,10 @@ async function run() {
 
     // get all packages api
     app.get("/packages", async (req, res) => {
-      const result = await packagesCollection.find().toArray();
+      const result = await packagesCollection
+        .find()
+        .sort({ order: 1 })
+        .toArray();
       res.send(result);
     });
 
