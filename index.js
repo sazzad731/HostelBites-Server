@@ -7,7 +7,6 @@ const {
   MongoClient,
   ServerApiVersion,
   ObjectId,
-  Timestamp,
 } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -430,6 +429,14 @@ async function run() {
         const result = await upcomingMealsCollection.updateOne(query, {
           $push: { likes: email },
         });
+        // publish meal after receive 10 meals
+        const publishAbleMeal = await upcomingMealsCollection.findOne(query);
+        if (publishAbleMeal.likes.length >= 10) {
+          const publish = await mealsCollection.insertOne(publishAbleMeal);
+          if (publish.insertedId) {
+            await upcomingMealsCollection.deleteOne(query);
+          }
+        }
         return res.send(result);
       }
       const result = await mealsCollection.updateOne(query, {
