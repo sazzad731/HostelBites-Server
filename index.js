@@ -212,7 +212,7 @@ async function run() {
 
 
     // get all upcoming meals
-    app.get("/upcoming-meals", verifyJWT, async(req, res)=>{
+    app.get("/upcoming-meals", async(req, res)=>{
       const result = await upcomingMealsCollection
         .aggregate([
           {
