@@ -8,6 +8,7 @@ const {
   ServerApiVersion,
   ObjectId,
 } = require("mongodb");
+const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors());
@@ -24,6 +25,34 @@ const client = new MongoClient(uri, {
   },
 });
 
+
+// JWT middlewares
+const verifyJWT = async(req, res, next)=>{
+  const token = req?.headers?.authorization?.split(" ")[ 1 ];
+  if(!token){
+    return res.status(401).send({ message: "Unauthorized Access!" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET_KEY, (error, decoded)=>{
+    if(error){
+      return res.status(401).send({ message: "Unauthorized Access!" });
+    }
+    req.decodedEmail = decoded;
+    next()
+  });
+}
+
+
+const verifyQueryEmail = (req, res, next)=>{
+  const { email } = req.query;
+  if(email !== req.decodedEmail){
+    return res.status(403).send({message: "Forbidden Access!"})
+  }
+  next()
+}
+
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -36,16 +65,28 @@ async function run() {
     const mealRequestCollection = db.collection("mealRequest");
     const upcomingMealsCollection = db.collection("upcomingMeals");
 
+
+    // JWT related api
+    app.post('/jwt', async(req, res)=>{
+      const { email } = req.body;
+      const token = jwt.sign(email, process.env.JWT_SECRET_KEY)
+      res.send({token, message: "JWT Created Successfully!"})
+    })
+
+
+
+
+
     //find single user
-    app.get("/user", async (req, res) => {
+    app.get("/user", verifyJWT, verifyQueryEmail, async (req, res) => {
       const { email } = req.query;
       const result = await usersCollection.findOne({ email });
       const numberOfMeals = await mealsCollection.estimatedDocumentCount();
       res.send({ result, numberOfMeals });
     });
 
-    // get all users
-    app.get("/users", async (req, res) => {
+    // get all users admin route
+    app.get("/users",verifyJWT, async (req, res) => {
       const { nameOrEmail } = req.query;
       const query = {};
 
@@ -155,8 +196,11 @@ async function run() {
     });
 
     // Add meal api
-    app.post("/add-meal", async (req, res) => {
+    app.post("/add-meal", verifyJWT, async (req, res) => {
       const data = req.body;
+      if(data.adminEmail !== req.decodedEmail){
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
       const mealData = {
         ...data,
         postTime: new Date(),
@@ -168,7 +212,7 @@ async function run() {
 
 
     // get all upcoming meals
-    app.get("/upcoming-meals", async(req, res)=>{
+    app.get("/upcoming-meals", verifyJWT, async(req, res)=>{
       const result = await upcomingMealsCollection
         .aggregate([
           {
@@ -184,8 +228,14 @@ async function run() {
 
 
     // Post an upcoming meals
-    app.post("/upcoming-meals", async(req, res)=>{
+    app.post("/upcoming-meals", verifyJWT, async(req, res)=>{
       const data = req.body;
+
+      if (data.adminEmail !== req.decodedEmail) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+
+
       const mealData = {
         ...data,
         postTime: new Date(),
@@ -208,8 +258,14 @@ async function run() {
 
 
     // get requested meals (for user and admin)
-    app.get("/requested-meals", async (req, res) => {
+    app.get("/requested-meals",verifyJWT, async (req, res) => {
       const { email, role, search } = req.query;
+      
+      if(email){
+        if(email !== req.decodedEmail){
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
+      }
 
       const isAdmin = role === "admin";
 
@@ -308,8 +364,11 @@ async function run() {
 
 
     //Meal request api
-    app.post("/meal-request", async (req, res) => {
+    app.post("/meal-request", verifyJWT, async (req, res) => {
       const requestInfo = req.body;
+      if(requestInfo.userEmail !== req.decodedEmail){
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
       const existRequest = await mealRequestCollection.findOne({
         mealId: requestInfo.mealId,
       });
@@ -334,7 +393,7 @@ async function run() {
     });
 
     // get single package by id
-    app.get("/package/:id", async (req, res) => {
+    app.get("/package/:id", verifyJWT, async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await packagesCollection.findOne(query);
@@ -349,13 +408,13 @@ async function run() {
     });
 
     // get all payment
-    app.get("/payment-history", async (req, res) => {
+    app.get("/payment-history", verifyJWT, verifyQueryEmail, async (req, res) => {
       const { email } = req.query;
       const result = await paymentCollection.find({ email }).toArray();
       res.send(result);
     });
 
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { amountInCents } = req.body;
       try {
         const paymentIntent = await stripe.paymentIntents.create({
@@ -369,9 +428,12 @@ async function run() {
       }
     });
 
-    app.put("/payments", async (req, res) => {
+    app.put("/payments", verifyJWT, async (req, res) => {
       const { packageName, email, amount, paymentMethod, transactionId } =
         req.body;
+      if(email !== req.decodedEmail){
+        return res.status(403).send({message: "Forbidden Access"})
+      }
       try {
         // update user badge
         const updateBadge = await usersCollection.updateOne(
@@ -422,22 +484,35 @@ async function run() {
     });
 
     // Meal likes
-    app.post("/like", async (req, res) => {
+    app.post("/like",verifyJWT, async (req, res) => {
       const { mealId, email, badge } = req.body;
+      if(email !== req.decodedEmail){
+        return res.status(403).send({ message: "Forbidden Access!" });
+      }
       const query = { _id: new ObjectId(mealId) };
       if (badge === "Silver" || badge === "Gold" || badge === "Platinum") {
-        const result = await upcomingMealsCollection.updateOne(query, {
+        const upMeal = await upcomingMealsCollection.updateOne(query, {
           $push: { likes: email },
         });
+        const meal = await mealsCollection.updateOne(query, {
+          $push: { likes: email },
+        });
+
         // publish meal after receive 10 meals
         const publishAbleMeal = await upcomingMealsCollection.findOne(query);
-        if (publishAbleMeal.likes.length >= 10) {
+        if (publishAbleMeal?.likes?.length >= 10) {
           const publish = await mealsCollection.insertOne(publishAbleMeal);
           if (publish.insertedId) {
             await upcomingMealsCollection.deleteOne(query);
           }
         }
-        return res.send(result);
+
+        if(upMeal.modifiedCount === 1){
+          return res.send(upMeal)
+        }
+        if(meal.modifiedCount === 1){
+          return res.send(meal)
+        }
       }
       const result = await mealsCollection.updateOne(query, {
         $push: { likes: email },
@@ -446,7 +521,7 @@ async function run() {
     });
 
     // Get all review
-    app.get("/reviews", async (req, res) => {
+    app.get("/reviews", verifyJWT, verifyQueryEmail, async (req, res) => {
       const { email } = req.query;
       const result = await mealsCollection
         .aggregate([
@@ -465,8 +540,11 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/add-review", async (req, res) => {
+    app.post("/add-review", verifyJWT, async (req, res) => {
       const data = req.body;
+      if(data.email !== req.decodedEmail){
+        return res.status(403).send({message: "Forbidden Access"})
+      }
       const { mealId } = req.query;
       const query = { _id: new ObjectId(mealId) };
       const addedReview = {
