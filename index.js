@@ -85,7 +85,7 @@ async function run() {
       res.send({ result, numberOfMeals });
     });
 
-    // get all users admin route
+    // get all users for admin route
     app.get("/users",verifyJWT, async (req, res) => {
       const { nameOrEmail } = req.query;
       const query = {};
@@ -129,9 +129,9 @@ async function run() {
       res.send(result);
     });
 
-    //get meals by search, category and price range
+    //get meals by search, category, price range and ascending-descending price
     app.get("/meals", async (req, res) => {
-      const { page = 1, limit = 10, search, category, priceRange } = req.query;
+      const { page = 1, limit = 10, search, category, priceRange, price } = req.query;
       let query = {};
 
       // Search by text (e.g., meal title)
@@ -158,6 +158,7 @@ async function run() {
         .find(query)
         .skip(skip)
         .limit(parseInt(limit))
+        .sort({price: price})
         .toArray();
       const total = await mealsCollection.countDocuments(query);
 
